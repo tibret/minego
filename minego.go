@@ -21,6 +21,8 @@ var BG_BLUE = "\033[48;2;0;0;255m"
 var BG_GREEN = "\033[48;2;0;255;0m"
 var BG_WHITE = "\033[48;2;255;255;255m"
 
+var POSITION = "\033[%d;%dH"
+
 const (
 	covered  = iota
 	flagged  = iota
@@ -52,7 +54,6 @@ func main() {
 	board := newBoard(30, 10)
 	clearScreen()
 	gameLoop(board)
-	fmt.Println("")
 	printBoard(board, true)
 }
 
@@ -79,9 +80,13 @@ func gameLoop(board *board) {
 				board.cursor.x = board.cursor.x - 1
 			}
 		case 's':
-			board.cursor.y = board.cursor.y + 1
+			if board.cursor.y < board.height-1 {
+				board.cursor.y = board.cursor.y + 1
+			}
 		case 'd':
-			board.cursor.x = board.cursor.x + 1
+			if board.cursor.x < board.width-1 {
+				board.cursor.x = board.cursor.x + 1
+			}
 		case 'f':
 			g := getGlyph(board, board.cursor)
 			if g.status == covered {
@@ -97,13 +102,17 @@ func gameLoop(board *board) {
 			reveal(board, board.cursor)
 			if getGlyph(board, board.cursor).bomb {
 				gameOver = true
+				fmt.Printf(POSITION, board.height+1, 4)
+				fmt.Print(RED)
+				fmt.Print("YOU LOSE!")
+				fmt.Print(RESET)
 			}
 		}
 
 		if checkVictory(board) {
 			gameOver = true
-			clearScreen()
-			fmt.Println(GREEN + "YOU WIN!" + RESET)
+			fmt.Printf(POSITION, board.height+1, 4)
+			fmt.Print(GREEN + "YOU WIN!" + RESET)
 		} else {
 			go rerender(board)
 		}
@@ -111,7 +120,6 @@ func gameLoop(board *board) {
 }
 
 func rerender(board *board) {
-	clearScreen()
 	printBoard(board, false)
 }
 
@@ -283,13 +291,7 @@ func checkVictory(board *board) bool {
 }
 
 func printBoard(board *board, debug bool) {
-	fmt.Print(" ")
-	for y := range board.rowcol[0] {
-		fmt.Print(y % 10)
-	}
-	fmt.Print("\n")
 	for row := range board.rowcol {
-		fmt.Print(row % 10)
 		for col := range board.rowcol[row] {
 			g := board.rowcol[row][col]
 			if debug {
@@ -304,7 +306,7 @@ func printBoard(board *board, debug bool) {
 					clr = clr + BG_GREEN
 				}
 
-				printCharacter(clr, cha)
+				printCharacter(clr, cha, row, col)
 			} else {
 				var cha string
 				var clr string
@@ -321,14 +323,15 @@ func printBoard(board *board, debug bool) {
 				if col == board.cursor.x && row == board.cursor.y {
 					clr = clr + BG_GREEN
 				}
-				printCharacter(clr, cha)
+				printCharacter(clr, cha, row, col)
 			}
 		}
 		fmt.Print("\n")
 	}
 }
 
-func printCharacter(color string, character string) {
+func printCharacter(color string, character string, row int, col int) {
+	fmt.Printf(POSITION, row+1, col+1)
 	fmt.Print(color)
 	fmt.Print(character)
 	fmt.Print(RESET)
