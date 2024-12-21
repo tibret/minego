@@ -1,8 +1,7 @@
-package main
+package minego
 
 import (
 	"fmt"
-	"github.com/eiannone/keyboard"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -50,21 +49,75 @@ type coord struct {
 	y int
 }
 
-func main() {
-	board := newBoard(30, 10)
-	clearScreen()
-	gameLoop(board)
-	printBoard(board, true)
+type InputProvider interface {
+	GetInput(c chan rune)
 }
 
-func gameLoop(board *board) {
+func SendMove(board *board, char rune) bool {
 	gameOver := false
-	printBoard(board, false)
+
+	switch char {
+	case 'q':
+		gameOver = true
+	case 'w':
+		if board.cursor.y > 0 {
+			board.cursor.y = board.cursor.y - 1
+		}
+	case 'a':
+		if board.cursor.x > 0 {
+			board.cursor.x = board.cursor.x - 1
+		}
+	case 's':
+		if board.cursor.y < board.height-1 {
+			board.cursor.y = board.cursor.y + 1
+		}
+	case 'd':
+		if board.cursor.x < board.width-1 {
+			board.cursor.x = board.cursor.x + 1
+		}
+	case 'f':
+		g := getGlyph(board, board.cursor)
+		if g.status == covered {
+			g.status = flagged
+		} else if g.status == flagged {
+			g.status = covered
+		}
+	case 'r':
+		if !board.initialized {
+			initBoard(board, 15, board.cursor)
+			board.initialized = true
+		}
+		reveal(board, board.cursor)
+		if getGlyph(board, board.cursor).bomb {
+			gameOver = true
+			fmt.Printf(POSITION, board.height+1, 4)
+			fmt.Print(RED)
+			fmt.Print("YOU LOSE!")
+			fmt.Print(RESET)
+		}
+	default:
+		//do nothing
+	}
+
+	if checkVictory(board) {
+		gameOver = true
+		fmt.Printf(POSITION, board.height+1, 4)
+		fmt.Print(GREEN + "YOU WIN!" + RESET)
+	} else {
+		go rerender(board)
+	}
+
+	return gameOver
+}
+
+func GameLoop(board *board, input InputProvider) {
+	gameOver := false
+	PrintBoard(board, false)
 
 	c := make(chan rune)
 
 	for !gameOver {
-		go getInput(c)
+		go input.GetInput(c)
 
 		char := <-c
 
@@ -107,6 +160,8 @@ func gameLoop(board *board) {
 				fmt.Print("YOU LOSE!")
 				fmt.Print(RESET)
 			}
+		case 'n':
+			//do nothing
 		}
 
 		if checkVictory(board) {
@@ -120,20 +175,7 @@ func gameLoop(board *board) {
 }
 
 func rerender(board *board) {
-	printBoard(board, false)
-}
-
-func getInput(c chan rune) {
-	char, key, err := keyboard.GetSingleKey()
-	if err != nil {
-		panic(err)
-	}
-
-	if key == keyboard.KeyEsc {
-		c <- 'q'
-	}
-
-	c <- char
+	PrintBoard(board, false)
 }
 
 func reveal(board *board, c coord) {
@@ -181,7 +223,7 @@ func revealGlyph(board *board, g *glyph) map[coord]glyph {
 	return neighbors
 }
 
-func newBoard(width int, height int) *board {
+func NewBoard(width int, height int) *board {
 	var rc = make([][]glyph, height)
 	for x := range rc {
 		rc[x] = make([]glyph, width)
@@ -290,7 +332,7 @@ func checkVictory(board *board) bool {
 	return true
 }
 
-func printBoard(board *board, debug bool) {
+func PrintBoard(board *board, debug bool) {
 	for row := range board.rowcol {
 		for col := range board.rowcol[row] {
 			g := board.rowcol[row][col]
@@ -341,7 +383,7 @@ func getGlyph(board *board, coord coord) *glyph {
 	return &board.rowcol[coord.y][coord.x]
 }
 
-func clearScreen() {
+func ClearScreen() {
 	cmd := exec.Command("cmd", "/c", "cls")
 	cmd.Stdout = os.Stdout
 	cmd.Run()
